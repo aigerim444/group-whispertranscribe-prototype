@@ -1,5 +1,5 @@
 <template>
-  <q-page class="flex flex-center bg-primary full-height">
+  <q-page class="flex flex-center full-height" style="background: radial-gradient(circle at top, #111827 0, #020617 40%, #000 100%);">
     <q-card flat class="border-radius-16 q-pa-xl full-width bg-white" :style="{ maxWidth: cardWidth }">
       <!-- Step 0: Free Credits -->
       <div v-if="step === 0" class="text-center">
@@ -8,7 +8,7 @@
         </div>
         <div class="text-h5 text-weight-medium q-mb-xs">Get started with</div>
         <div class="text-h4 text-weight-medium text-primary q-mb-lg">60 free minutes</div>
-        <q-btn no-caps color="primary" label="Continue" class="q-btn--lg full-width" @click="step = 1" />
+        <q-btn no-caps color="accent" label="Continue" class="q-btn--lg full-width" @click="step = 1" />
       </div>
 
       <!-- Steps 1–3 with step indicator -->
@@ -51,7 +51,7 @@
             class="q-mb-md default-input"
           />
           <div class="flex justify-end q-mt-md">
-            <q-btn no-caps label="Next" color="primary" @click="step = 2" />
+          <q-btn no-caps label="Next" color="accent" @click="step = 2" />
           </div>
         </div>
 
@@ -67,7 +67,7 @@
             class="q-mb-md default-input"
           />
           <div class="flex justify-end q-mt-md">
-            <q-btn no-caps label="Next" color="primary" :disable="!projectName?.trim()" @click="step = 3" />
+          <q-btn no-caps label="Next" color="accent" :disable="!projectName?.trim()" @click="step = 3" />
           </div>
         </div>
 
@@ -84,13 +84,13 @@
             />
           </div>
           <div class="flex justify-end q-mt-md">
-            <q-btn
-              no-caps
-              label="Next"
-              color="primary"
-              :disable="!selectedProfile"
-              @click="completeOnboarding"
-            />
+          <q-btn
+            no-caps
+            label="Next"
+            color="accent"
+            :disable="!selectedProfile"
+            @click="completeOnboarding"
+          />
           </div>
         </div>
       </template>
@@ -100,8 +100,8 @@
         <div class="text-h4 q-mt-xl q-mb-sm">Welcome to WhisperTranscribe!</div>
         <div class="q-mb-lg">Your workspace is set up for you 🎉</div>
         <div class="column items-center q-gutter-y-sm">
-          <q-btn no-caps label="Add your first transcript" color="primary" @click="goToStart" />
-          <q-btn no-caps flat color="primary" label="View example" @click="goToExample" />
+          <q-btn no-caps label="Add your first transcript" color="accent" @click="goToStart" />
+          <q-btn no-caps flat color="accent" label="View example" @click="goToExample" />
         </div>
       </div>
     </q-card>
@@ -164,15 +164,15 @@ function goToExample() {
   flex-shrink: 0;
 }
 .step-badge--done {
-  background: #743ee4;
+  background: var(--accent);
   color: #fff;
 }
 .step-badge--active {
-  background: #e3d8fa;
-  color: #743ee4;
+  background: var(--accent-50);
+  color: var(--accent);
 }
 .step-badge--future {
-  background: #f9f5ff;
-  color: #743ee4;
+  background: var(--accent-50);
+  color: var(--accent);
 }
 </style>

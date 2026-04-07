@@ -60,12 +60,12 @@ function isSelected(profile) {
 }
 
 .profile-item:hover {
-  background-color: #f9f5ff;
+  background-color: var(--accent-50);
 }
 
 .profile-item--selected {
-  background-color: #f9f5ff;
-  border-color: rgba(116, 62, 228, 0.35);
+  background-color: var(--accent-50);
+  border-color: rgba(37, 99, 235, 0.25);
 }
 
 .profile-item__avatar {

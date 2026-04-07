@@ -13,9 +13,9 @@ app.use(Quasar, {
   iconSet,
   config: {
     brand: {
-      primary: '#743ee4',
-      secondary: '#743ee4',
-      accent: '#ffa400',
+      primary: '#15152A',    // navy
+      secondary: '#15152A',
+      accent: '#5E55F4',     // CTA purple
       positive: '#21ba45',
       negative: '#c10015',
       info: '#31ccec',

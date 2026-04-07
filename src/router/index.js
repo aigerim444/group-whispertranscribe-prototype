@@ -22,6 +22,20 @@ const routes = [
     ]
   },
   {
+    path: '/processing',
+    component: () => import('../layouts/OnboardingLayout.vue'),
+    children: [
+      { path: '', component: () => import('../pages/ProcessingPage.vue') }
+    ]
+  },
+  {
+    path: '/create',
+    component: () => import('../layouts/OnboardingLayout.vue'),
+    children: [
+      { path: '', component: () => import('../pages/CreatePage.vue') }
+    ]
+  },
+  {
     path: '/transcript/:id',
     component: () => import('../layouts/MainLayout.vue'),
     children: [
