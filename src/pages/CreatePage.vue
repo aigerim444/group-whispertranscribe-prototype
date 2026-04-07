@@ -9,7 +9,7 @@
       <div class="create-card">
         <div class="create-title">Create</div>
         <div class="create-sub">
-          Your transcript is ready. What do you want to make from it?
+          Your transcript is ready. What do you want to make?
         </div>
 
         <div class="create-grid">
