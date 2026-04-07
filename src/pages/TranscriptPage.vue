@@ -110,14 +110,26 @@
       <div v-else-if="view === 'blog'" class="view-blog">
         <div class="blog-transcript" :class="{ collapsed: !transcriptOpen }">
           <div class="bt-header">
-            <span class="bt-title">Transcript <span class="bt-ok">✓ 18:42</span></span>
+            <div>
+              <span class="bt-title">Transcript <span class="bt-ok">✓ 18:42</span></span>
+              <div class="bt-legend" aria-label="Highlight legend">
+                <span class="bt-leg">
+                  <span class="bt-swatch used" aria-hidden="true"></span>
+                  Used in post
+                </span>
+                <span class="bt-leg">
+                  <span class="bt-swatch hl" aria-hidden="true"></span>
+                  Notable quote
+                </span>
+              </div>
+            </div>
             <button class="bt-close" type="button" @click="transcriptOpen = false" title="Hide transcript">✕</button>
           </div>
           <div class="bt-scroll">
             <div v-for="(p, idx) in transcriptChunks" :key="idx" class="bt-chunk">
               <div class="bt-time">{{ p.t }}</div>
               <div class="bt-text">
-                <span v-if="p.hl" :class="p.hl">{{ p.a }}</span><span v-else>{{ p.a }}</span>
+                <span :id="p.id" :class="p.hl || ''">{{ p.a }}</span>
                 <span v-if="p.b"> {{ p.b }}</span>
               </div>
             </div>
@@ -1341,6 +1353,11 @@ onBeforeUnmount(() => {
 .bt-header { padding: 12px 16px; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; flex-shrink: 0; }
 .bt-title { font-size: 11px; font-weight: 800; color: var(--muted); text-transform: uppercase; letter-spacing: 0.8px; }
 .bt-ok { color: var(--green); margin-left: 6px; font-weight: 800; }
+.bt-legend { display: flex; align-items: center; gap: 10px; margin-top: 8px; }
+.bt-leg { display: inline-flex; align-items: center; gap: 6px; font-size: 11px; font-weight: 700; color: var(--muted); }
+.bt-swatch { width: 10px; height: 10px; border-radius: 3px; border: 1px solid rgba(0,0,0,0.05); }
+.bt-swatch.used { background: #BBF7D0; border-color: rgba(22,163,74,0.25); }
+.bt-swatch.hl { background: #FEF08A; border-color: rgba(202,138,4,0.25); }
 .bt-close { width: 22px; height: 22px; border-radius: 5px; border: none; background: var(--bg); color: var(--muted); font-size: 13px; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: all 0.12s; }
 .bt-close:hover { background: var(--border); color: var(--text); }
 .bt-scroll { flex: 1; overflow-y: auto; padding: 14px 16px; }
