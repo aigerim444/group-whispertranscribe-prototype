@@ -3,15 +3,9 @@ import { createRouter, createWebHistory } from 'vue-router'
 const routes = [
   {
     path: '/',
-    redirect: () => {
-      return localStorage.getItem('onboardingCompleted') ? '/start' : '/auth'
-    }
-  },
-  {
-    path: '/auth',
     component: () => import('../layouts/OnboardingLayout.vue'),
     children: [
-      { path: '', component: () => import('../pages/AuthPage.vue') }
+      { path: '', component: () => import('../pages/LandingPage.vue') }
     ]
   },
   {
