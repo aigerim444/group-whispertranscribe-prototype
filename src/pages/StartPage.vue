@@ -30,6 +30,11 @@
         </div>
 
         <div class="upload-body">
+          <div class="upload-tabs">
+            <button class="upload-tab" :class="{ active: uploadMode === 'upload' }" type="button" @click="uploadMode = 'upload'">📁 Upload file</button>
+            <button class="upload-tab" :class="{ active: uploadMode === 'record' }" type="button" @click="uploadMode = 'record'">🎙️ Record now</button>
+          </div>
+
           <div class="field">
             <div class="field-label">Project name</div>
             <q-input
@@ -41,7 +46,7 @@
             />
           </div>
 
-          <div class="field">
+          <div v-if="uploadMode === 'upload'" class="field">
             <div class="field-label">File</div>
 
             <input
@@ -86,6 +91,24 @@
             </div>
           </div>
 
+          <div v-else class="field">
+            <div class="field-label">Record</div>
+            <div class="record-zone">
+              <div class="record-icon" :class="{ pulsing: isRecording }">🎙️</div>
+              <div class="record-timer">{{ recordTimeLabel }}</div>
+              <div class="record-waveform" :class="{ active: isRecording }">
+                <span v-for="n in 18" :key="n" class="rw-bar" :style="{ animationDelay: `${(n % 6) * 0.08}s` }"></span>
+              </div>
+              <div class="record-sub">
+                {{ isRecording ? 'Recording in progress… click Stop when finished.' : recordingReady ? 'Recording saved. You can transcribe now.' : 'Record directly inside WhisperTranscribe.' }}
+              </div>
+              <button v-if="!isRecording" class="record-btn" type="button" @click="startRecording">
+                {{ recordingReady ? 'Record again' : 'Start recording' }}
+              </button>
+              <button v-else class="record-btn stop" type="button" @click="stopRecording">Stop recording</button>
+            </div>
+          </div>
+
           <div class="upload-actions">
             <q-btn outline no-caps class="btn-back" label="← Back" @click="$router.push('/')" />
             <q-btn
@@ -105,14 +128,19 @@
 </template>
 
 <script setup>
-import { computed, ref } from 'vue'
+import { computed, ref, onBeforeUnmount } from 'vue'
 import { useRouter } from 'vue-router'
 
 const projectName = ref('GabiAfterHours')
 const fileInputRef = ref(null)
 const selectedFiles = ref([])
 const isDragOver = ref(false)
+const uploadMode = ref('upload')
+const isRecording = ref(false)
+const recordSeconds = ref(0)
+const recordingReady = ref(false)
 const router = useRouter()
+let recordInterval = null
 
 const supportedFormatsLine =
   '.3gp, .aac, .amc, .asf, .avi, .flac, .m4a, .m4b, .mkv, .mka, .mov, .mp3, .mp4, .mpeg, .mpga, .oga, .ogg, .opus, .wav, .webm, .wma, and .wmv'
@@ -120,7 +148,15 @@ const supportedFormatsLine =
 const fileAccept =
   '.3gp,.aac,.amc,.asf,.avi,.flac,.m4a,.m4b,.mkv,.mka,.mov,.mp3,.mp4,.mpeg,.mpga,.oga,.ogg,.opus,.wav,.webm,.wma,.wmv'
 
-const canTranscribe = computed(() => selectedFiles.value.length > 0)
+const canTranscribe = computed(() => {
+  if (uploadMode.value === 'record') return recordingReady.value
+  return selectedFiles.value.length > 0
+})
+const recordTimeLabel = computed(() => {
+  const m = Math.floor(recordSeconds.value / 60)
+  const s = String(recordSeconds.value % 60).padStart(2, '0')
+  return `${m}:${s}`
+})
 
 function setFiles(fileList) {
   const files = Array.from(fileList || []).slice(0, 10)
@@ -149,12 +185,35 @@ function clearFiles() {
   selectedFiles.value = []
 }
 
+function startRecording() {
+  recordingReady.value = false
+  recordSeconds.value = 0
+  isRecording.value = true
+  if (recordInterval) clearInterval(recordInterval)
+  recordInterval = setInterval(() => {
+    recordSeconds.value += 1
+  }, 1000)
+}
+
+function stopRecording() {
+  isRecording.value = false
+  if (recordInterval) {
+    clearInterval(recordInterval)
+    recordInterval = null
+  }
+  if (recordSeconds.value > 0) recordingReady.value = true
+}
+
 function onTranscribe() {
   if (!canTranscribe.value) return
   localStorage.setItem('wt_projectName', projectName.value || 'Untitled project')
-  localStorage.setItem('wt_fileName', selectedFiles.value?.[0]?.name || 'Upload')
+  localStorage.setItem('wt_fileName', uploadMode.value === 'record' ? 'Recorded audio' : (selectedFiles.value?.[0]?.name || 'Upload'))
   router.push('/processing')
 }
+
+onBeforeUnmount(() => {
+  if (recordInterval) clearInterval(recordInterval)
+})
 </script>
 
 <style scoped>
@@ -268,6 +327,37 @@ function onTranscribe() {
   padding: 24px 32px 32px;
 }
 
+.upload-tabs {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.upload-tab {
+  flex: 1;
+  height: 38px;
+  border-radius: 10px;
+  border: 1.5px solid var(--border);
+  background: var(--bg);
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 800;
+  cursor: pointer;
+  font-family: 'DM Sans', sans-serif;
+  transition: all 0.12s;
+}
+
+.upload-tab:hover {
+  border-color: var(--accent-mid);
+  color: var(--text);
+}
+
+.upload-tab.active {
+  border-color: var(--accent);
+  background: var(--accent-lt);
+  color: var(--accent);
+}
+
 .field {
   margin-bottom: 20px;
 }
@@ -302,6 +392,78 @@ function onTranscribe() {
   border-color: var(--green);
   border-style: solid;
   background: var(--green-lt);
+}
+
+.record-zone {
+  border: 1.5px solid var(--border);
+  background: var(--bg);
+  border-radius: 14px;
+  padding: 24px 18px;
+  text-align: center;
+}
+
+.record-icon {
+  font-size: 34px;
+  margin-bottom: 8px;
+}
+
+.record-icon.pulsing { animation: recPulse 1s ease-in-out infinite; }
+@keyframes recPulse { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.12); } }
+
+.record-timer {
+  font-size: 30px;
+  font-weight: 800;
+  color: var(--accent);
+  margin-bottom: 10px;
+}
+
+.record-waveform {
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  gap: 4px;
+  height: 36px;
+  margin-bottom: 10px;
+}
+
+.rw-bar {
+  width: 4px;
+  height: 7px;
+  border-radius: 999px;
+  background: var(--accent-mid);
+  transition: height 0.2s;
+}
+
+.record-waveform.active .rw-bar {
+  animation: rwJump 0.9s ease-in-out infinite alternate;
+}
+
+@keyframes rwJump {
+  0% { height: 7px; opacity: 0.5; }
+  100% { height: 30px; opacity: 1; }
+}
+
+.record-sub {
+  font-size: 12px;
+  color: var(--muted);
+  margin-bottom: 12px;
+}
+
+.record-btn {
+  height: 36px;
+  border: none;
+  border-radius: 10px;
+  padding: 0 14px;
+  background: var(--accent);
+  color: white;
+  font-size: 12px;
+  font-weight: 800;
+  cursor: pointer;
+  font-family: 'DM Sans', sans-serif;
+}
+
+.record-btn.stop {
+  background: #B91C1C;
 }
 
 .dz-icon {

@@ -123,14 +123,28 @@
                 </span>
               </div>
             </div>
-            <button class="bt-close" type="button" @click="transcriptOpen = false" title="Hide transcript">✕</button>
+            <div class="bt-tools">
+              <button class="bt-tool-btn" type="button" title="Find and replace" @click="findReplaceOpen = !findReplaceOpen">🔍</button>
+              <button class="bt-tool-btn" type="button" title="Auto-trim pauses" @click="runAutoTrim">✂️</button>
+              <button class="bt-close" type="button" @click="transcriptOpen = false" title="Hide transcript">✕</button>
+            </div>
+          </div>
+          <div class="find-replace-bar" :class="{ open: findReplaceOpen }">
+            <input v-model="findQuery" class="fr-input" placeholder="Find…" />
+            <input v-model="replaceQuery" class="fr-input" placeholder="Replace with…" />
+            <button class="fr-btn" type="button" @click="doReplace">Replace all</button>
+            <button class="fr-close" type="button" @click="closeFindReplace">✕</button>
+          </div>
+          <div class="trim-notice" :class="{ show: trimNoticeOpen }">
+            <span>✂️ <strong>3 long pauses</strong> detected and trimmed</span>
+            <button type="button" @click="undoTrim">Undo</button>
           </div>
           <div class="bt-scroll">
             <div v-for="(p, idx) in transcriptChunks" :key="idx" class="bt-chunk">
               <div class="bt-time">{{ p.t }}</div>
               <div class="bt-text">
-                <span :id="p.id" :class="p.hl || ''">{{ p.a }}</span>
-                <span v-if="p.b"> {{ p.b }}</span>
+                <span :id="p.id" :class="p.hl || ''" v-html="highlightText(p.a)"></span>
+                <span v-if="p.b" v-html="` ${highlightText(p.b)}`"></span>
               </div>
             </div>
           </div>
@@ -142,9 +156,10 @@
               class="transcript-toggle"
               :class="{ active: transcriptOpen }"
               type="button"
-              @click="transcriptOpen = !transcriptOpen"
+              @click="toggleTranscript"
             >
               {{ transcriptOpen ? '📄 Hide transcript' : '📄 Show transcript' }}
+              <span v-if="!transcriptOpen && !transcriptPulseDismissed" class="transcript-pulse"></span>
             </button>
 
             <div class="bar-divider"></div>
@@ -181,7 +196,7 @@
               </div>
             </div>
 
-            <button class="regen-btn" type="button" @click="regen">⚡ Regenerate</button>
+            <button class="regen-btn" type="button" @click="regenDialogOpen = true">⚡ Regenerate</button>
           </div>
 
           <div class="blog-loading" :class="{ show: blogLoading }">
@@ -228,6 +243,34 @@
               <button class="btn-sm-ghost" type="button" @click="notify('📋 Markdown copied!')">Copy MD</button>
               <button class="btn-sm-accent" type="button" @click="notify('✅ Exported as .docx!')">Export .docx</button>
             </div>
+          </div>
+        </div>
+      </div>
+
+      <div v-if="regenDialogOpen" class="regen-overlay" @click.self="regenDialogOpen = false">
+        <div class="regen-dialog">
+          <div class="rd-title">What should we change?</div>
+          <div class="rd-sub">Pick one or more quick edits, or type your own instruction below.</div>
+          <div class="rd-chips">
+            <button
+              v-for="option in regenOptions"
+              :key="option"
+              type="button"
+              class="rd-chip"
+              :class="{ on: regenSelected.includes(option) }"
+              @click="toggleRegenOption(option)"
+            >
+              {{ option }}
+            </button>
+          </div>
+          <textarea
+            v-model="regenCustom"
+            class="rd-input"
+            placeholder="e.g. Keep the same structure, but stronger opening and fewer filler words."
+          ></textarea>
+          <div class="rd-actions">
+            <button class="rd-cancel" type="button" @click="regenDialogOpen = false">Cancel</button>
+            <button class="rd-go" type="button" @click="submitRegen">⚡ Regenerate</button>
           </div>
         </div>
       </div>
@@ -615,6 +658,15 @@ const optIntro = ref(true)
 const optQuotes = ref(true)
 const optSeo = ref(true)
 const optCta = ref(false)
+const transcriptPulseDismissed = ref(false)
+const regenDialogOpen = ref(false)
+const regenOptions = ['Make it shorter', 'More conversational', 'Add more quotes', 'Stronger opening', 'Less formal', 'More detail']
+const regenSelected = ref([])
+const regenCustom = ref('')
+const findReplaceOpen = ref(false)
+const findQuery = ref('')
+const replaceQuery = ref('')
+const trimNoticeOpen = ref(false)
 
 const aspect = ref('9:16')
 const style = ref('Classic')
@@ -1073,7 +1125,77 @@ function regen() {
   }, 1800)
 }
 
-const baseTranscriptChunks = [
+function toggleTranscript() {
+  transcriptOpen.value = !transcriptOpen.value
+  if (transcriptOpen.value) transcriptPulseDismissed.value = true
+}
+
+function escapeRegExp(value) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+}
+
+function highlightText(text) {
+  const q = findQuery.value.trim()
+  if (!q) return text
+  const re = new RegExp(`(${escapeRegExp(q)})`, 'gi')
+  return String(text).replace(re, '<mark class="fr-match">$1</mark>')
+}
+
+function closeFindReplace() {
+  findReplaceOpen.value = false
+  findQuery.value = ''
+  replaceQuery.value = ''
+}
+
+function doReplace() {
+  const find = findQuery.value.trim()
+  if (!find) return
+  const re = new RegExp(escapeRegExp(find), 'gi')
+  let count = 0
+  baseTranscriptChunks.value = baseTranscriptChunks.value.map(chunk => {
+    const next = { ...chunk }
+    next.a = next.a.replace(re, () => {
+      count += 1
+      return replaceQuery.value
+    })
+    next.b = next.b.replace(re, () => {
+      count += 1
+      return replaceQuery.value
+    })
+    return next
+  })
+  notify(`✅ Replaced ${count} instance${count === 1 ? '' : 's'}`)
+  closeFindReplace()
+}
+
+function runAutoTrim() {
+  trimNoticeOpen.value = true
+  notify('✂️ 3 long pauses trimmed from transcript')
+}
+
+function undoTrim() {
+  trimNoticeOpen.value = false
+  notify('↩ Trim undone')
+}
+
+function toggleRegenOption(option) {
+  if (regenSelected.value.includes(option)) {
+    regenSelected.value = regenSelected.value.filter(x => x !== option)
+    return
+  }
+  regenSelected.value = [...regenSelected.value, option]
+}
+
+function submitRegen() {
+  const summary = [...regenSelected.value, regenCustom.value.trim()].filter(Boolean).join(' · ')
+  regenDialogOpen.value = false
+  if (summary) notify(`📝 Feedback saved: ${summary}`)
+  regen()
+  regenSelected.value = []
+  regenCustom.value = ''
+}
+
+const baseTranscriptChunks = ref([
   {
     id: 'h1',
     t: '0:00',
@@ -1110,7 +1232,7 @@ const baseTranscriptChunks = [
     a: 'Anybody who continues to post at a matching quality for their niche will absolutely grow.',
     b: 'Absolutely, 100%.',
   },
-]
+])
 
 const toneHighlights = {
   Educational: { h1: 'used', h2: '', h3: 'used', h4: 'hl', h5: '', h6: 'hl' },
@@ -1120,7 +1242,7 @@ const toneHighlights = {
 
 const transcriptChunks = computed(() => {
   const map = toneHighlights[tone.value] || toneHighlights.Educational
-  return baseTranscriptChunks.map(c => ({
+  return baseTranscriptChunks.value.map(c => ({
     ...c,
     hl: map[c.id] || '',
   }))
@@ -1358,14 +1480,92 @@ onBeforeUnmount(() => {
 .bt-swatch { width: 10px; height: 10px; border-radius: 3px; border: 1px solid rgba(0,0,0,0.05); }
 .bt-swatch.used { background: #BBF7D0; border-color: rgba(22,163,74,0.25); }
 .bt-swatch.hl { background: #FEF08A; border-color: rgba(202,138,4,0.25); }
+.bt-tools { display: flex; align-items: center; gap: 6px; }
+.bt-tool-btn {
+  width: 24px;
+  height: 24px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  font-size: 12px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.12s;
+}
+.bt-tool-btn:hover { border-color: var(--accent); background: var(--accent-lt); }
 .bt-close { width: 22px; height: 22px; border-radius: 5px; border: none; background: var(--bg); color: var(--muted); font-size: 13px; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: all 0.12s; }
 .bt-close:hover { background: var(--border); color: var(--text); }
+.find-replace-bar {
+  display: none;
+  gap: 8px;
+  padding: 10px 12px;
+  border-bottom: 1px solid #F6D365;
+  background: #FFF6CC;
+}
+.find-replace-bar.open { display: flex; }
+.fr-input {
+  flex: 1;
+  min-width: 0;
+  height: 32px;
+  border: 1px solid #EBCB6E;
+  border-radius: 8px;
+  padding: 0 10px;
+  font-size: 12px;
+  font-family: 'DM Sans', sans-serif;
+  color: #6B4E00;
+  background: #FFFBEB;
+}
+.fr-btn {
+  height: 32px;
+  border: 1px solid #EBCB6E;
+  border-radius: 8px;
+  background: #FDE68A;
+  color: #6B4E00;
+  font-size: 12px;
+  font-weight: 800;
+  font-family: 'DM Sans', sans-serif;
+  padding: 0 10px;
+  cursor: pointer;
+}
+.fr-close {
+  width: 32px;
+  height: 32px;
+  border: 1px solid #EBCB6E;
+  border-radius: 8px;
+  background: #FFFBEB;
+  color: #6B4E00;
+  cursor: pointer;
+}
+.trim-notice {
+  display: none;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 10px 12px;
+  border-bottom: 1px solid #86EFAC;
+  background: #ECFDF3;
+  color: #166534;
+  font-size: 12px;
+  font-weight: 700;
+}
+.trim-notice.show { display: flex; }
+.trim-notice button {
+  border: none;
+  background: transparent;
+  color: var(--accent);
+  font-size: 11px;
+  font-weight: 800;
+  cursor: pointer;
+}
 .bt-scroll { flex: 1; overflow-y: auto; padding: 14px 16px; }
 .bt-chunk { margin-bottom: 18px; }
 .bt-time { font-size: 10px; font-weight: 800; color: var(--accent); margin-bottom: 4px; }
 .bt-text { font-size: 13px; line-height: 1.75; color: var(--text); }
 .bt-text .hl { background: #FEF08A; padding: 1px 2px; border-radius: 2px; }
 .bt-text .used { background: #BBF7D0; padding: 1px 2px; border-radius: 2px; }
+:deep(mark.fr-match) { background: #FCD34D; color: #4A3400; border-radius: 2px; padding: 0 1px; }
 
 .blog-output { flex: 1; display: flex; flex-direction: column; overflow: hidden; min-width: 0; }
 .blog-settings-bar {
@@ -1396,6 +1596,19 @@ onBeforeUnmount(() => {
 }
 .transcript-toggle:hover { background: var(--bg); color: var(--text); }
 .transcript-toggle.active { background: var(--accent-lt); color: var(--accent); border-color: var(--accent-mid); }
+.transcript-pulse {
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  background: var(--accent);
+  box-shadow: 0 0 0 0 rgba(94,85,244,0.55);
+  animation: tPulse 1.8s ease-in-out infinite;
+}
+@keyframes tPulse {
+  0% { box-shadow: 0 0 0 0 rgba(94,85,244,0.58); }
+  70% { box-shadow: 0 0 0 9px rgba(94,85,244,0); }
+  100% { box-shadow: 0 0 0 0 rgba(94,85,244,0); }
+}
 .bar-divider { width: 1px; height: 20px; background: var(--border); flex-shrink: 0; }
 .bar-group { display: flex; align-items: center; gap: 6px; }
 .bar-label { font-size: 10px; font-weight: 800; color: var(--muted); text-transform: uppercase; letter-spacing: 0.7px; white-space: nowrap; }
@@ -1480,6 +1693,67 @@ onBeforeUnmount(() => {
 .bl-spinner { width: 32px; height: 32px; border: 2.5px solid var(--border); border-top-color: var(--accent); border-radius: 50%; animation: spin 0.7s linear infinite; }
 .bl-title { font-size: 14px; font-weight: 700; }
 .bl-sub { font-size: 12px; color: var(--muted); }
+
+.regen-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(8, 10, 18, 0.52);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+  padding: 16px;
+}
+.regen-dialog {
+  width: min(560px, 100%);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  box-shadow: 0 20px 60px rgba(0,0,0,0.30);
+  padding: 16px;
+}
+.rd-title { font-size: 18px; font-weight: 900; color: var(--text); margin-bottom: 6px; }
+.rd-sub { font-size: 13px; color: var(--muted); margin-bottom: 12px; line-height: 1.5; }
+.rd-chips { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
+.rd-chip {
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--muted);
+  border-radius: 999px;
+  padding: 6px 10px;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  font-family: 'DM Sans', sans-serif;
+}
+.rd-chip.on { background: var(--accent-lt); color: var(--accent); border-color: var(--accent-mid); }
+.rd-input {
+  width: 100%;
+  min-height: 92px;
+  border: 1.5px solid var(--border);
+  border-radius: 10px;
+  padding: 10px;
+  font-size: 13px;
+  line-height: 1.5;
+  font-family: 'DM Sans', sans-serif;
+  color: var(--text);
+  background: var(--bg);
+  margin-bottom: 12px;
+  resize: vertical;
+}
+.rd-actions { display: flex; justify-content: flex-end; gap: 8px; }
+.rd-cancel, .rd-go {
+  border-radius: 9px;
+  border: 1px solid var(--border);
+  height: 34px;
+  padding: 0 12px;
+  font-size: 12px;
+  font-weight: 800;
+  cursor: pointer;
+  font-family: 'DM Sans', sans-serif;
+}
+.rd-cancel { background: var(--bg); color: var(--muted); }
+.rd-go { background: var(--accent); border-color: var(--accent); color: #fff; }
 
 @keyframes spin { to { transform: rotate(360deg); } }
 
