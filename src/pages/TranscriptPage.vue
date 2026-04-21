@@ -285,7 +285,7 @@
           <div class="clips-scroll">
             <div class="clips-help">AI picked the highest-impact moments from your transcript.</div>
 
-            <div v-for="c in clips" :key="c.id" class="clip-card" :class="{ active: clipId === c.id }" @click="clipId = c.id">
+            <div v-for="c in clips" :key="c.id" class="clip-card" :class="{ active: clipId === c.id }" @click="selectClip(c.id)">
               <div class="cc-top">
                 <span class="cc-num">{{ c.label }}</span>
                 <span class="cc-score" :class="c.scoreClass">{{ c.score }}</span>
@@ -301,16 +301,14 @@
           <div class="clips-preview">
             <div class="phone-wrap">
               <div class="phone-label">Preview</div>
-              <div class="phone-frame">
-                <div class="phone-bg"></div>
+              <div class="phone-frame" :style="phoneFrameStyle">
+                <div class="phone-bg" :style="{ background: activeStylePreset.bg }"></div>
                 <div class="phone-avatar">👨‍💼</div>
                 <div class="phone-top-tag">yt: GabiAfterHours ↑</div>
                 <div class="phone-caption-wrap">
-                  <div class="phone-caption-text">
-                    {{ activeClipPreview }}
-                  </div>
+                  <div class="phone-caption-text" :style="phoneCaptionStyle" v-html="phoneCaptionHtml"></div>
                 </div>
-                <div class="phone-progress-bar"><div class="phone-progress-fill" :style="{ width: '38%' }"></div></div>
+                <div class="phone-progress-bar"><div class="phone-progress-fill" :style="{ width: `${clipProgress}%` }"></div></div>
               </div>
               <div class="aspect-pills">
                 <button class="aspect-pill" :class="{ on: aspect === '9:16' }" type="button" @click="aspect = '9:16'">9:16</button>
@@ -324,47 +322,47 @@
             <div class="tl-header">
               <span class="tl-label">Timeline</span>
               <div class="tl-controls">
-                <div class="tl-btn">⏮</div>
-                <div class="tl-btn tl-play">▶</div>
-                <div class="tl-btn">⏭</div>
+                <div class="tl-btn" @click="clipProgress = Math.max(0, clipProgress - 10)">⏮</div>
+                <div class="tl-btn tl-play" @click="toggleClipPlay">{{ clipPlaying ? '⏸' : '▶' }}</div>
+                <div class="tl-btn" @click="clipProgress = Math.min(100, clipProgress + 10)">⏭</div>
                 <div class="tl-divider" aria-hidden="true"></div>
-                <div class="tl-btn">✂</div>
+                <div class="tl-btn" @click="notify('✂️ Split at playhead')">✂</div>
               </div>
             </div>
-            <div class="tl-track">
+            <div class="tl-track" @click="scrubTimeline">
               <div class="tl-waveform">
                 <div v-for="n in 60" :key="n" class="tl-bar" :class="{ active: n > 12 && n < 38 }" :style="{ height: `${25 + (n * 7) % 55}%` }"></div>
               </div>
-              <div class="tl-selection">
+              <div class="tl-selection" :style="{ left: activeClip.selLeft, width: activeClip.selWidth }">
                 <div class="tl-handle l"></div><div class="tl-handle r"></div>
               </div>
-              <div class="tl-playhead"></div>
+              <div class="tl-playhead" :style="{ left: `${clipProgress}%` }"></div>
             </div>
             <div class="tl-timestamps"><span>0:00</span><span>0:15</span><span>0:30</span><span>0:45</span><span>0:53</span></div>
-            <div class="tl-selected">Selected: 3:15 → 4:08 · Duration: 0:53</div>
+            <div class="tl-selected">Selected: {{ activeClip.range }} · Duration: {{ activeClip.duration }}</div>
           </div>
         </div>
 
         <div class="clips-panel">
           <div class="cp-section">
             <div class="cp-label">Caption text</div>
-            <textarea class="cp-caption-input" :value="activeClipQuote" readonly></textarea>
+            <textarea class="cp-caption-input" v-model="clipCaption"></textarea>
             <div class="cp-hint">Edit caption text directly</div>
           </div>
 
           <div class="cp-section">
             <div class="cp-label">Caption style</div>
             <div class="style-grid">
-              <div class="style-swatch" :class="{ on: style === 'Classic' }" @click="style = 'Classic'">
+              <div class="style-swatch" :class="{ on: style === 'Classic' }" @click="styleSel('Classic')">
                 <div class="style-preview-mini" style="background:#000;color:white;">Bold</div>Classic
               </div>
-              <div class="style-swatch" :class="{ on: style === 'Luxury' }" @click="style = 'Luxury'">
+              <div class="style-swatch" :class="{ on: style === 'Luxury' }" @click="styleSel('Luxury')">
                 <div class="style-preview-mini" style="background:linear-gradient(135deg,#1A0050,#4A0080);color:#FFD700;">Gold</div>Luxury
               </div>
-              <div class="style-swatch" :class="{ on: style === 'Minimal' }" @click="style = 'Minimal'">
+              <div class="style-swatch" :class="{ on: style === 'Minimal' }" @click="styleSel('Minimal')">
                 <div class="style-preview-mini" style="background:#F5F5F0;color:#111;font-style:italic;">Soft</div>Minimal
               </div>
-              <div class="style-swatch" :class="{ on: style === 'Tech' }" @click="style = 'Tech'">
+              <div class="style-swatch" :class="{ on: style === 'Tech' }" @click="styleSel('Tech')">
                 <div class="style-preview-mini" style="background:#002244;color:#4AF;font-family:monospace;">Mono</div>Tech
               </div>
             </div>
@@ -372,27 +370,29 @@
 
           <div class="cp-section">
             <div class="cp-label">Options</div>
-            <div class="cp-toggle-row"><span class="cp-toggle-label">Remove filler words</span><div class="tgl on"></div></div>
-            <div class="cp-toggle-row"><span class="cp-toggle-label">Add hook text</span><div class="tgl on"></div></div>
-            <div class="cp-toggle-row"><span class="cp-toggle-label">Highlight keywords</span><div class="tgl on"></div></div>
+            <div class="cp-toggle-row"><span class="cp-toggle-label">Remove filler words</span><div class="tgl" :class="{ on: clipOptFiller }" @click="clipOptFiller = !clipOptFiller"></div></div>
+            <div class="cp-toggle-row"><span class="cp-toggle-label">Add hook text</span><div class="tgl" :class="{ on: clipOptHook }" @click="clipOptHook = !clipOptHook"></div></div>
+            <div class="cp-toggle-row"><span class="cp-toggle-label">Highlight keywords</span><div class="tgl" :class="{ on: clipOptKeywords }" @click="clipOptKeywords = !clipOptKeywords"></div></div>
           </div>
 
           <div class="cp-section">
             <div class="cp-label">Export to</div>
-            <div class="export-platform on">
+            <div class="export-platform" :class="{ on: clipExportTo === 'tiktok' }" @click="clipExportTo = 'tiktok'">
               <span class="ep-icon">📱</span>
               <div><div class="ep-name">TikTok / Reels</div><div class="ep-spec">9:16 · 1080×1920</div></div>
-              <span class="ep-check">✓</span>
+              <span class="ep-check" v-if="clipExportTo === 'tiktok'">✓</span>
             </div>
-            <div class="export-platform">
+            <div class="export-platform" :class="{ on: clipExportTo === 'youtube' }" @click="clipExportTo = 'youtube'">
               <span class="ep-icon">▶️</span>
               <div><div class="ep-name">YouTube Shorts</div><div class="ep-spec">9:16 · Max 60s</div></div>
+              <span class="ep-check" v-if="clipExportTo === 'youtube'">✓</span>
             </div>
-            <div class="export-platform">
+            <div class="export-platform" :class="{ on: clipExportTo === 'linkedin' }" @click="clipExportTo = 'linkedin'">
               <span class="ep-icon">💼</span>
               <div><div class="ep-name">LinkedIn</div><div class="ep-spec">1:1 · Square</div></div>
+              <span class="ep-check" v-if="clipExportTo === 'linkedin'">✓</span>
             </div>
-            <button class="export-big-btn" type="button">↑ Export Clip</button>
+            <button class="export-big-btn" type="button" @click="notify('✅ Clip exported!')">↑ Export Clip</button>
           </div>
         </div>
       </div>
@@ -670,6 +670,14 @@ const trimNoticeOpen = ref(false)
 
 const aspect = ref('9:16')
 const style = ref('Classic')
+const clipPlaying = ref(false)
+const clipProgress = ref(15)
+const clipCaption = ref('')
+const clipExportTo = ref('tiktok')
+const clipOptFiller = ref(true)
+const clipOptHook = ref(true)
+const clipOptKeywords = ref(true)
+let clipPlayIv = null
 
 const viewLabel = computed(() => {
   if (view.value === 'overview') return 'Overview'
@@ -1256,6 +1264,9 @@ const clips = [
     scoreClass: 'high',
     quote: 'The videos that do well are ones I put a lot of effort into — and the effort is subconsciously noticed.',
     range: '3:15 – 4:08',
+    duration: '0:53',
+    selLeft: '15%',
+    selWidth: '48%',
     why: 'High conviction + actionable insight',
   },
   {
@@ -1265,6 +1276,9 @@ const clips = [
     scoreClass: 'high',
     quote: 'I only make content that I wish existed.',
     range: '8:30 – 9:17',
+    duration: '0:47',
+    selLeft: '55%',
+    selWidth: '40%',
     why: 'Memorable, quotable statement',
   },
   {
@@ -1274,16 +1288,83 @@ const clips = [
     scoreClass: 'med',
     quote: 'Anybody who continues to post at a matching quality will absolutely grow. 100%.',
     range: '14:05 – 15:07',
+    duration: '1:02',
+    selLeft: '78%',
+    selWidth: '18%',
     why: 'Strong motivational hook',
   },
 ]
 
 const clipId = ref('c1')
 const activeClip = computed(() => clips.find(c => c.id === clipId.value) || clips[0])
-const activeClipQuote = computed(() => activeClip.value.quote)
-const activeClipPreview = computed(() => {
-  const q = activeClip.value.quote
-  return q.length > 64 ? q.slice(0, 64) + '…' : q
+const stylePresets = {
+  Classic: { bg: 'linear-gradient(160deg,#1A1040,#0D1A40)', color: '#fff', weight: '800', fontStyle: 'normal', fontFamily: 'inherit', hlColor: '#FFD700' },
+  Luxury: { bg: 'linear-gradient(160deg,#1A0050,#4A0080)', color: '#FFD700', weight: '800', fontStyle: 'normal', fontFamily: 'inherit', hlColor: '#fff' },
+  Minimal: { bg: '#F0EEE8', color: '#111', weight: '500', fontStyle: 'italic', fontFamily: 'Georgia, serif', hlColor: '#5E55F4' },
+  Tech: { bg: '#001830', color: '#4AF', weight: '700', fontStyle: 'normal', fontFamily: 'monospace', hlColor: '#fff' },
+}
+const activeStylePreset = computed(() => stylePresets[style.value] || stylePresets.Classic)
+const phoneCaptionStyle = computed(() => ({
+  color: activeStylePreset.value.color,
+  fontWeight: activeStylePreset.value.weight,
+  fontStyle: activeStylePreset.value.fontStyle,
+  fontFamily: activeStylePreset.value.fontFamily,
+}))
+const phoneFrameStyle = computed(() => {
+  if (aspect.value === '1:1') return { width: '260px', height: '260px', borderRadius: '16px' }
+  if (aspect.value === '16:9') return { width: '320px', height: '180px', borderRadius: '12px' }
+  return { width: '200px', height: '356px', borderRadius: '28px' }
+})
+const phoneCaptionHtml = computed(() => {
+  const raw = (clipCaption.value || '').trim()
+  const short = raw.length > 80 ? `${raw.slice(0, 77)}…` : raw
+  if (!short) return ''
+  const words = short.split(' ')
+  const head = words.slice(0, Math.min(5, words.length)).join(' ')
+  const rest = words.slice(Math.min(5, words.length)).join(' ')
+  const headHtml = `<span class="cap-hl" style="color:${activeStylePreset.value.hlColor}">${head}</span>`
+  return rest ? `${headHtml}<br>${rest}` : headHtml
+})
+
+function selectClip(id) {
+  clipId.value = id
+  clipProgress.value = 15
+  clipPlaying.value = false
+}
+
+function styleSel(name) {
+  style.value = name
+}
+
+function scrubTimeline(e) {
+  const rect = e.currentTarget.getBoundingClientRect()
+  const pct = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width)) * 100
+  clipProgress.value = pct
+}
+
+function stopClipPlay() {
+  if (clipPlayIv) clearInterval(clipPlayIv)
+  clipPlayIv = null
+  clipPlaying.value = false
+}
+
+function toggleClipPlay() {
+  if (clipPlaying.value) {
+    stopClipPlay()
+    return
+  }
+  clipPlaying.value = true
+  clipPlayIv = setInterval(() => {
+    clipProgress.value = Math.min(100, clipProgress.value + 0.8)
+    if (clipProgress.value >= 100) {
+      stopClipPlay()
+      clipProgress.value = 0
+    }
+  }, 80)
+}
+
+watchEffect(() => {
+  clipCaption.value = activeClip.value.quote
 })
 
 onMounted(() => {
@@ -1296,6 +1377,8 @@ onMounted(() => {
 
 onBeforeUnmount(() => {
   if (ddListener) window.removeEventListener('click', ddListener)
+  if (trTimer) clearInterval(trTimer)
+  if (clipPlayIv) clearInterval(clipPlayIv)
 })
 </script>
 
@@ -1799,6 +1882,7 @@ onBeforeUnmount(() => {
 .phone-avatar { position: absolute; bottom: 60px; left: 50%; transform: translateX(-50%); width: 80px; height: 80px; background: linear-gradient(135deg, #3A2F8F, #5E55F4); border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 28px; }
 .phone-caption-wrap { position: absolute; bottom: 20px; left: 10px; right: 10px; text-align: center; }
 .phone-caption-text { font-size: 11px; font-weight: 800; color: white; line-height: 1.4; text-shadow: 0 2px 6px rgba(0,0,0,0.8); }
+.phone-caption-text .cap-hl { color: #FFD700; }
 .phone-top-tag { position: absolute; top: 12px; left: 10px; font-size: 9px; font-weight: 800; color: white; background: rgba(94,85,244,0.85); padding: 3px 7px; border-radius: 5px; }
 .phone-progress-bar { position: absolute; bottom: 0; left: 0; right: 0; height: 3px; background: rgba(255,255,255,0.15); }
 .phone-progress-fill { height: 100%; background: var(--accent); }
